@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>DRP Movie Database JQuery Client - Search OMDBAPI</title>
+<meta charset="UTF-8">
+
+<script
+	src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+
+<script>
+	var omdbMovie = "";
+
+	function omdbLookupSubmitClicked() {
+
+		var omdbTitleStr = $("#omdbTitle").val();
+		var imdbIdStr = $("#imdbId").val();
+		
+		if ( omdbTitleStr.length > 0 ) {
+			console.info("searching by title");
+			searchByTitle(omdbTitleStr);
+		}
+		else if ( imdbIdStr.length > 0) {
+			console.info("searching by imdbid");
+			searchByIMDBId(imdbIdStr);
+		}
+		else{
+			alert("no fields were defined for searching: " + omdbTitleStr + " or " + imdbIdStr );
+		}
+	}
+	
+	function searchByTitle( omdbTitleStr ) {
+		console.log("in searchByTitle");
+		var lookupUrl = "/ws/omdb/search?title=" + encodeURI(omdbTitleStr);
+		console.info("lookupUrl:" + lookupUrl);
+
+		disableSearch();
+		
+		$.ajax({
+			url: lookupUrl, 
+			type: 'GET',
+			success: function(data) {
+				omdbMovie = data;
+				processFoundOmdbMovie() ;
+				enableSearch();
+			},
+			error: function() {
+				alert("Unable to find: " + omdbTitleStr );
+				enableSearch();
+			}
+		});
+	}
+	
+	function searchByIMDBId( imdbIdStr ) {
+		console.log("in searchByIMDBId");
+		var lookupUrl = "/ws/omdb/search?imdbid=" + imdbIdStr;
+		console.info("lookupUrl:" + lookupUrl);
+
+		disableSearch();
+		
+		$.ajax({
+			url: lookupUrl, 
+			type: 'GET',
+			success: function(data) {
+				omdbMovie = data;
+				processFoundOmdbMovie() ;
+				enableSearch();
+			},
+			error: function() {
+				alert("Unable to find: " + imdbIdStr );
+				enableSearch();
+			}
+		});
+	}
+	
+	function processFoundOmdbMovie() {
+		var movieStr = JSON.stringify(omdbMovie);
+		
+		$("#omdbFoundMovieJSON").html(movieStr);
+		
+		var foundMovieHTML = "<div>";
+		
+		foundMovieHTML += "<h3>" + omdbMovie.title + "</h3>";
+		foundMovieHTML += "<img src='" + omdbMovie.poster + "' />"
+		foundMovieHTML += "<table>";
+		foundMovieHTML += "<tr><th>Rating</th><td>" + omdbMovie.rated + "</td></tr>";
+		foundMovieHTML += "<tr><th>Released</th><td>" + omdbMovie.released + "</td></tr>";
+		foundMovieHTML += "<tr><th>Director</th><td>" + omdbMovie.director + "</td></tr>";
+		foundMovieHTML += "<tr><th>Writers</th><td>" + omdbMovie.writer + "</td></tr>";
+		foundMovieHTML += "<tr><th>Actors</th><td>" + omdbMovie.actors + "</td></tr>";
+		foundMovieHTML += "<tr><th>Runtime</th><td>" + omdbMovie.runtime + "</td></tr>";
+		foundMovieHTML += "<tr><th>Genre</th><td>" + omdbMovie.genre + "</td></tr>";
+		foundMovieHTML += "<tr><th>Type</th><td>" + omdbMovie.type + "</td></tr>";
+		foundMovieHTML += "<tr><th>IMDB Rating</th><td>" + omdbMovie.imdbRating + "</td></tr>";
+		foundMovieHTML += "<tr><th>Plot</th><td>" + omdbMovie.plot + "</td></tr>";
+		foundMovieHTML += "</table>";
+		foundMovieHTML += "</div>";
+	
+		$("#omdbFoundMovie").append(foundMovieHTML) ;
+	}
+
+	function disableSearch() {
+		$("#omdbLookupSubmit").prop("value","Searching the OMDB...");
+		$("#omdbLookupSubmit").prop("disabled",true);
+		$("#omdbFoundMovieJSON").html("") ;
+		$("#omdbFoundMovie").html("") ;
+	}
+	
+	function enableSearch() {
+		$("#foundMovieDiv").show();
+		$("#omdbLookupSubmit").prop("value","Lookup in OMDB");
+		$("#omdbLookupSubmit").prop("disabled",false);
+		$("#omdbTitle").val("");
+		$("#imdbId").val("");
+	}
+
+	function clearSearch() {
+		$("#foundMovieDiv").hide();
+		$("#omdbLookupSubmit").prop("value","Lookup in OMDB");
+		$("#omdbLookupSubmit").prop("disabled",false);
+		$("#omdbTitle").val("");
+		$("#imdbId").val("");
+	}
+
+	function importOMDBMovieSubmitClicked() {
+		var putUrl = "/ws/drpmovies/" + omdbMovie.imdbId;
+
+		$.ajax({ 
+			url: putUrl,
+			type: 'PUT',
+			data: JSON.stringify(omdbMovie),
+			contentType: "application/json",
+			success: function(data) {
+				clearSearch();
+			},
+			error: function() {
+				alert("Unable to add: " + omdbMovie.title );
+				enableSearch();
+			}
+		});
+	}
+	
+	
+</script>
+<style>
+	#omdbFoundMovieJSON { display:none;}
+</style>
+</head>
+<body>
+		<h2>Lookup a Movie</h2>
+		<form name="lookupViaOMDBForm" action="#">
+			<div>
+				<label for="omdbTitle">OMDB Movie Title to Find:</label><input
+					type="text" name="omdbTitle" id="omdbTitle" />
+			</div>
+			<div>
+				<label for="imdbId">IMDB Id to Find:</label><input
+					type="text" name="imdbId" id="imdbId" />
+			</div>
+			<div>
+				<input type="button" id="omdbLookupSubmit"
+					onclick="omdbLookupSubmitClicked()" value="Lookup in OMDB" />
+			</div>
+		</form>
+
+		<div id="foundMovieDiv" style="display:none;">
+			<h2>Found Movie</h2>
+			<form name="importMovieForm" action="#">
+				<div>
+				<input type="button" id="importOMDBMovieSubmit"
+					onclick="importOMDBMovieSubmitClicked()" value="Import OMDB Movie" />
+				</div>
+			</form>
+			<div id="omdbFoundMovie"></div>	
+			<div id="omdbFoundMovieJSON"></div>
+		</div>
+</body>
+</html>

@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>DRP Movie Database JQuery Client</title>
+<meta charset="UTF-8">
+
+<link rel="stylesheet" href="/styles/jquery-ui.css">
+<script
+	src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+
+<script src="/scripts/jquery-ui.js"></script>
+
+<script>
+	var omdbMovie = "";
+	var existingDrpMovies = "";
+
+	function omdbLookupSubmitClicked() {
+
+		var omdbTitleStr = $("#omdbTitle").val();
+		var imdbIdStr = $("#imdbId").val();
+		
+		if ( omdbTitleStr.length > 0 ) {
+			console.info("searching by title");
+			searchByTitle(omdbTitleStr);
+		}
+		else if ( imdbIdStr.length > 0) {
+			console.info("searching by imdbid");
+			searchByIMDBId(imdbIdStr);
+		}
+		else{
+			alert("no fields were defined for searching: " + omdbTitleStr + " or " + imdbIdStr );
+		}
+	}
+	
+	function searchByTitle( omdbTitleStr ) {
+		console.log("in searchByTitle");
+		var lookupUrl = "/ws/omdb/search?title=" + encodeURI(omdbTitleStr);
+		console.info("lookupUrl:" + lookupUrl);
+
+		disableSearch();
+		
+		$.ajax({
+			url: lookupUrl, 
+			type: 'GET',
+			success: function(data) {
+				omdbMovie = data;
+				processFoundOmdbMovie() ;
+				enableSearch();
+			},
+			error: function() {
+				alert("Unable to find: " + omdbTitleStr );
+				enableSearch();
+			}
+		});
+	}
+	
+	function searchByIMDBId( imdbIdStr ) {
+		console.log("in searchByIMDBId");
+		var lookupUrl = "/ws/omdb/search?imdbid=" + imdbIdStr;
+		console.info("lookupUrl:" + lookupUrl);
+
+		disableSearch();
+		
+		$.ajax({
+			url: lookupUrl, 
+			type: 'GET',
+			success: function(data) {
+				omdbMovie = data;
+				processFoundOmdbMovie() ;
+				enableSearch();
+			},
+			error: function() {
+				alert("Unable to find: " + imdbIdStr );
+				enableSearch();
+			}
+		});
+	}
+	
+	function processFoundOmdbMovie() {
+		var movieStr = JSON.stringify(omdbMovie);
+		
+		$("#omdbFoundMovieJSON").html(movieStr);
+		
+		var foundMovieHTML = "<div>";
+		
+		foundMovieHTML += "<h3>" + omdbMovie.title + "</h3>";
+		foundMovieHTML += "<img src='" + omdbMovie.poster + "' />"
+		foundMovieHTML += "<table>";
+		foundMovieHTML += "<tr><th>Rating</th><td>" + omdbMovie.rated + "</td></tr>";
+		foundMovieHTML += "<tr><th>Released</th><td>" + omdbMovie.released + "</td></tr>";
+		foundMovieHTML += "<tr><th>Director</th><td>" + omdbMovie.director + "</td></tr>";
+		foundMovieHTML += "<tr><th>Writers</th><td>" + omdbMovie.writer + "</td></tr>";
+		foundMovieHTML += "<tr><th>Actors</th><td>" + omdbMovie.actors + "</td></tr>";
+		foundMovieHTML += "<tr><th>Runtime</th><td>" + omdbMovie.runtime + "</td></tr>";
+		foundMovieHTML += "<tr><th>Genre</th><td>" + omdbMovie.genre + "</td></tr>";
+		foundMovieHTML += "<tr><th>Type</th><td>" + omdbMovie.type + "</td></tr>";
+		foundMovieHTML += "<tr><th>IMDB Rating</th><td>" + omdbMovie.imdbRating + "</td></tr>";
+		foundMovieHTML += "<tr><th>Plot</th><td>" + omdbMovie.plot + "</td></tr>";
+		foundMovieHTML += "</table>";
+		foundMovieHTML += "</div>";
+	
+		$("#omdbFoundMovie").append(foundMovieHTML) ;
+	}
+
+	function disableSearch() {
+		$("#omdbLookupSubmit").prop("value","Searching the OMDB...");
+		$("#omdbLookupSubmit").prop("disabled",true);
+		$("#omdbFoundMovieJSON").html("") ;
+		$("#omdbFoundMovie").html("") ;
+	}
+	
+	function enableSearch() {
+		$("#foundMovieDiv").show();
+		$("#omdbLookupSubmit").prop("value","Lookup in OMDB");
+		$("#omdbLookupSubmit").prop("disabled",false);
+		$("#omdbTitle").val("");
+		$("#imdbId").val("");
+	}
+
+	function clearSearch() {
+		$("#foundMovieDiv").hide();
+		$("#omdbLookupSubmit").prop("value","Lookup in OMDB");
+		$("#omdbLookupSubmit").prop("disabled",false);
+		$("#omdbTitle").val("");
+		$("#imdbId").val("");
+	}
+
+	function importOMDBMovieSubmitClicked() {
+		var putUrl = "/ws/drpmovies/" + omdbMovie.imdbId;
+
+		$.ajax({ 
+			url: putUrl,
+			type: 'PUT',
+			data: JSON.stringify(omdbMovie),
+			contentType: "application/json",
+			success: function(data) {
+				updateExistingListUsingCurrentSort();
+				clearSearch();
+			},
+			error: function() {
+				alert("Unable to add: " + omdbMovie.title );
+				enableSearch();
+			}
+		});
+	}
+	
+	function importDRPMovieDatabaseSubmitClicked(){
+		alert("Import Button clicked");
+	}
+	
+	function updateExistingListUsingCurrentSort() {
+		var selectedSort = $("#currentMovieSort").val();
+		updateExistingList(selectedSort);
+	}
+	
+	function currentMovieSortChanged() {
+		updateExistingListUsingCurrentSort();
+	}
+	
+	function updateExistingList( sortType ) {
+		
+		var getListUrl = "/ws/drpmovies/" ;
+		
+		if ( typeof sortType !== 'undefined') {
+			getListUrl += "?sort=" + sortType; 
+		}
+		
+		$.get(getListUrl, function(data) {
+			var moviesStr = JSON.stringify(data);
+			
+			$("#listjson").html( moviesStr);
+			
+			existingDrpMovies = data;
+			displayExistingList();
+		});
+	}
+	
+	function doubleCheckDelete( imdbId, title ) {
+		if (confirm('Are you sure you want to delete '+title+'?')) {
+			var deleteUrl = "/ws/drpmovies/"+imdbId ;
+			$.ajax({
+				url: deleteUrl, 
+				type: 'DELETE',
+				success: function(data) {
+					updateExistingListUsingCurrentSort();
+				},
+				error: function() {
+					alert("Unable to delete: " + title );
+				}
+			});
+		} 
+	}
+	
+	function displayExistingList() {
+		var arrayLength = existingDrpMovies.length;
+		var movieHtml = "";
+		
+		for (var i = 0; i < arrayLength; i++) {
+			var drpMovie = existingDrpMovies[i];
+			var releasedDate = new Date( drpMovie.released ) ;
+			
+		
+			movieHtml += "<div class='drpmovie'>";
+				movieHtml += "<h3>" + drpMovie.title + "</h3>";
+				movieHtml += "<span class='deletemovie'>";
+					movieHtml += "<a onclick=\"doubleCheckDelete( '"+drpMovie.imdbId +"', '"+drpMovie.title +"');\" ><img src='./images/button-delete-icon.png' width='32' height='32'/></a>";
+				movieHtml += "</span>";
+				movieHtml += "<img class='poster' src='"+ drpMovie.posterURL +"'/>"
+				movieHtml += "<table>";
+				movieHtml += "<tr><th>Released</th><td>" + releasedDate.toDateString() +"</td></tr>";
+				movieHtml += "<tr><th>Rated</th><td>" + drpMovie.rating +"</td></tr>";
+				movieHtml += "<tr><th>Runtime</th><td>" + drpMovie.runtimeMinutes +" mins </td></tr>";
+				movieHtml += "<tr><th>IMDB ID</th><td><a href='http://www.imdb.com/title/" + drpMovie.imdbId + "' target='_blank'>" + drpMovie.imdbId +"</a></td></tr>";
+				movieHtml += "</table>";
+			movieHtml += "</div>";
+		}
+		
+		var tmp = $("#list").html();
+		
+		$("#list").html( movieHtml );
+	}
+	
+	function launchSearch() {
+		alert("search launched");
+		//window.open('jquery-search-movies.html', 'Search OMDBAPI', '');
+		lookupDialog.dialog( "open" );
+	}
+	
+	lookupDialog = $( "#lookup" ).dialog({
+	      autoOpen: false,
+	      height: 300,
+	      width: 350,
+	      modal: true,
+	      /*
+	      buttons: {
+	        "Create an account": addUser,
+	        Cancel: function() {
+	          dialog.dialog( "close" );
+	        }
+	      },
+	      */
+	      close: function() {
+	        form[ 0 ].reset();
+	        allFields.removeClass( "ui-state-error" );
+	        updateExistingListUsingCurrentSort();
+	      }
+	    });
+	
+	$(document).ready( function() {
+		updateExistingList("title");
+	});
+</script>
+<style>
+	/*
+	#outerlist {width:68%;float:right;padding:5px;border-left:2px solid black;}
+	#lookup {width:30%;float:left;padding:5px;}
+	*/
+
+	#list { clear:both; padding-top:0.5em;}
+	.drpmovie { width:300px; float:left;border:1px solid black; height:450px; overflow:auto; position:relative;padding:10px;}
+	.drpmovie h3 { text-align:center;}
+	.drpmovie img.poster { width:200px;position:relative;left:50%;margin-left:-100px; }
+	.drpmovie th { text-align:right;padding-right:2px;}
+	.drpmovie .deletemovie { position:absolute; right:0;top:0; opacity:0.0;}
+	.drpmovie .deletemovie:hover { position:absolute; right:0;top:0; opacity:1.0;}
+	
+	#omdbFoundMovieJSON { display:none;}
+	#listjson {display:none;clear:both;}
+</style>
+</head>
+<body>
+	<h1>DRP Movie Database JQuery Client</h1>
+	<div style="text-align:right;font-size:smaller;border-bottom:3px solid black;"><a href="index.html">back to top</a></div>
+	
+	<div id="lookup" title="Looking up Movie">
+		<h2>Lookup a Movie</h2>
+		<form name="lookupViaOMDBForm" action="#">
+			<div>
+				<label for="omdbTitle">OMDB Movie Title to Find:</label><input
+					type="text" name="omdbTitle" id="omdbTitle" />
+			</div>
+			<div>
+				<label for="imdbId">IMDB Id to Find:</label><input
+					type="text" name="imdbId" id="imdbId" />
+			</div>
+			<div>
+				<input type="button" id="omdbLookupSubmit"
+					onclick="omdbLookupSubmitClicked()" value="Lookup in OMDB" />
+			</div>
+		</form>
+
+		<div id="foundMovieDiv" style="display:none;">
+			<h2>Found Movie</h2>
+			<form name="importMovieForm" action="#">
+				<div>
+				<input type="button" id="importOMDBMovieSubmit"
+					onclick="importOMDBMovieSubmitClicked()" value="Import OMDB Movie" />
+				</div>
+			</form>
+			<div id="omdbFoundMovie"></div>	
+			<div id="omdbFoundMovieJSON"></div>
+		</div>
+	</div>
+	
+	<div id="outerlist">
+		<h2>Current Movies</h2>
+		<div id="currentControls">
+		<!-- <div style="width:49%;float:left;"> -->	
+			<div>
+				<form>
+					<div>
+						<input type="button" id="" value="Search..." onclick="launchSearch();"/>
+						<label for="currentMovieSort">Sort:</label>
+						<select name="currentMovieSort" id="currentMovieSort" onchange="currentMovieSortChanged()">
+							<option value="title">Title</option>
+							<option value="released">Release Date</option>
+			 			</select>	
+						<span><a href="/ws/drpmovies/" target="_blank">Export Current Database</a></span>
+		 			</div>
+				</form>
+			</div>
+			<!-- 
+			<div style="width:49%;float:left;">
+				<div style="margin-bottom:1em;"><a href="/ws/drpmovies/" target="_blank">Export Current Database</a></div>
+				<form>
+					<div>
+						<label for="drpMoveDatabaseFile">Database File to Upload:</label><input type="file" name="drpMoveDatabaseFile" />
+					</div>
+					<div>
+						<input type="button" id="importEntireDatabaseSubmit"
+							onclick="importDRPMovieDatabaseSubmitClicked()" value="Import DRP Movie Database" />
+					</div>
+				</form>
+			</div>
+			 -->
+		</div>
+		<div id="list"></div>
+		<div id="listjson"></div>
+	</div>
+</body>
+</html>
